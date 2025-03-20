@@ -49,4 +49,45 @@ if __name__ == "__main__":
     )  # Extract labels from trial dataset
 
     y_trial_ohe = out_enc.transform(y_trial)  # One-hot encode trial labels
+
+    kf = KFold(n_splits=5, random_state=42, shuffle=True)
+
+    #############################################
+    #           Multi Output Perceptron         #
+    #           1024 Inputs, 10 outputs         #
+    #           Gradient Descent                #
+    #   Learning Rate [4^0, 4^1, 4^2, 4^3, 4^4] #
+    #############################################
+
+    error_logs = {}
+
+    best_lr = None
+    best_test_err_rate = float("inf")
+
+    nnet_metric = LearnNet.NNetMetric(f=nnet_error_rate)
+
+    nnet = LearnNet.NNet(nunits=[1024, K])
+
+    learning_rate = [4**0, 4**1, 4**2, 4**3, 4**4]
+
+    for lr in learning_rate:
+        opt = LearnNet.NNetGDOptimizer(metric=nnet_metric, max_iters=50, learn_rate=lr)
+
+        best_nnet = nnet.fit(X, y_ohe, X_test, y_test_ohe, optimizer=opt, verbose=1)
+
+        train_err = np.array(opt.train_err)
+        test_err = np.array(opt.test_err)
+
+        error_logs[lr] = {
+            "train_err": train_err,
+            "test_err": test_err,
+        }
+
+        final_test_err_rate = test_err[-1, 1]
+        if final_test_err_rate < best_test_err_rate:
+            best_test_err_rate = final_test_err_rate
+            best_lr = lr
+
+    print(f"Best Learning Rate --> {best_lr}")
+    print(f"Best Test error rate --> {best_test_err_rate}")
     breakpoint()
