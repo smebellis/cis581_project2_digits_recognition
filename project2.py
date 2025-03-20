@@ -11,6 +11,17 @@ def nnet_error_rate(y_true, y_pred):
     return LearnNet.error_rate(y_true_label, y_pred_label)
 
 
+def plot_err_loss(train_err: np.ndarray, test_err: np.ndarray, plot: str):
+    if plot == "loss":
+        plt.plot(train_err[:, 0])
+        plt.plot(test_err[:, 0])
+        plt.show()
+    else:
+        plt.plot(train_err[:, 1])
+        plt.plot(test_err[:, 1])
+        plt.show()
+
+
 if __name__ == "__main__":
 
     dataset_train = np.loadtxt("optdigits_train.dat")  # Load training dataset
@@ -59,10 +70,13 @@ if __name__ == "__main__":
     #   Learning Rate [4^0, 4^1, 4^2, 4^3, 4^4] #
     #############################################
 
-    error_logs = {}
+    results = {}
 
     best_lr = None
-    best_test_err_rate = float("inf")
+    best_test_error = float("inf")
+    best_train_error = float("inf")
+    best_train_loss = float("inf")
+    best_test_loss = float("inf")
 
     nnet_metric = LearnNet.NNetMetric(f=nnet_error_rate)
 
@@ -71,23 +85,56 @@ if __name__ == "__main__":
     learning_rate = [4**0, 4**1, 4**2, 4**3, 4**4]
 
     for lr in learning_rate:
-        opt = LearnNet.NNetGDOptimizer(metric=nnet_metric, max_iters=50, learn_rate=lr)
+        for i, (train_idx, val_idx) in enumerate(kf.split(X)):
 
-        best_nnet = nnet.fit(X, y_ohe, X_test, y_test_ohe, optimizer=opt, verbose=1)
+            X_train_fold, X_val_fold = X[train_idx], X[val_idx]
+            y_train_fold_ohe, y_val_fold_ohe = y_ohe[train_idx], y_ohe[val_idx]
 
-        train_err = np.array(opt.train_err)
-        test_err = np.array(opt.test_err)
+            opt = LearnNet.NNetGDOptimizer(
+                metric=nnet_metric, max_iters=50, learn_rate=lr
+            )
 
-        error_logs[lr] = {
-            "train_err": train_err,
-            "test_err": test_err,
-        }
+            best_nnet = nnet.fit(
+                X_train_fold,
+                y_train_fold_ohe,
+                X_val_fold,
+                y_val_fold_ohe,
+                optimizer=opt,
+                verbose=0,
+            )
 
-        final_test_err_rate = test_err[-1, 1]
-        if final_test_err_rate < best_test_err_rate:
-            best_test_err_rate = final_test_err_rate
-            best_lr = lr
+            train_err = np.array(opt.train_err)
+            test_err = np.array(opt.test_err)
 
-    print(f"Best Learning Rate --> {best_lr}")
-    print(f"Best Test error rate --> {best_test_err_rate}")
+            final_train_error = train_err[-1, 1]
+            final_test_error = test_err[-1, 1]
+            final_train_loss = train_err[-1, 0]
+            final_test_loss = test_err[-1, 0]
+
+            best_train_error = np.min(train_err[:, 1])
+            best_train_loss = np.min(train_err[:, 0])
+
+            best_test_error = np.min(test_err[:, 1])
+            best_test_loss = np.min(test_err[:, 0])
+            if lr not in results:
+                results[lr] = []
+            results[lr].append(
+                {
+                    "final_train_error": final_train_error,
+                    "final_test_error": final_test_error,
+                    "final_train_loss": final_train_loss,
+                    "final_test_loss": final_test_loss,
+                    "best_train_error": best_train_error,
+                    "best_test_error": best_test_error,
+                    "best_train_loss": best_train_loss,
+                    "best_test_loss": best_test_loss,
+                }
+            )
+
+    # plot_err_loss(train_err, test_err, "loss")
+
+    print(f"Best Train error rate --> {best_train_error}")
+    print(f"Best Test error rate --> {best_test_error}")
+    print(f"Best Train Loss --> {best_train_loss}")
+    print(f"Best Test Loss --> {best_test_loss}")
     breakpoint()
