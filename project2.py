@@ -9,8 +9,11 @@ from sklearn.preprocessing import LabelBinarizer
 import LearnNet
 
 
-def perceptron(X: np.ndarray, y_ohe: np.ndarray, K: int, kf: KFold):
+def perceptron(
+    X: np.ndarray, y_ohe: np.ndarray, X_test: np.ndarray, y_test_ohe: np.ndarray, K: int
+):
     results = {}
+    summary = []
 
     best_test_error = float("inf")
     best_train_error = float("inf")
@@ -21,29 +24,115 @@ def perceptron(X: np.ndarray, y_ohe: np.ndarray, K: int, kf: KFold):
 
     nnet = LearnNet.NNet(nunits=[1024, K])
 
-    learning_rate = [4**0, 4**1, 4**2, 4**3, 4**4]
+    learning_rate_exp = [0, 1, 2, 3, 4]
 
-    for lr in learning_rate:
+    for lr_exp in learning_rate_exp:
+
+        lr = 4**lr_exp
+
         if lr not in results:
             results[lr] = []
-        # for i, (train_idx, val_idx) in enumerate(kf.split(X)):
-
-        #     X_train_fold, X_val_fold = X[train_idx], X[val_idx]
-        #     y_train_fold_ohe, y_val_fold_ohe = y_ohe[train_idx], y_ohe[val_idx]
 
         opt = LearnNet.NNetGDOptimizer(metric=nnet_metric, max_iters=50, learn_rate=lr)
 
         best_nnet = nnet.fit(
-            # X_train_fold,
-            # y_train_fold_ohe,
-            # X_val_fold,
-            # y_val_fold_ohe,
             X,
             y_ohe,
             X_test,
             y_test_ohe,
             optimizer=opt,
-            verbose=0,
+            verbose=1,
+        )
+
+        train_err = np.array(opt.train_err)
+        test_err = np.array(opt.test_err)
+
+        # Get the final errors (last iteration)
+        final_train_error = train_err[-1, 1]
+        final_test_error = test_err[-1, 1]
+        final_train_loss = train_err[-1, 0]
+        final_test_loss = test_err[-1, 0]
+
+        # Get the best (minimum) errors during training
+        best_train_error = np.min(train_err[:, 1])
+        best_train_loss = np.min(train_err[:, 0])
+        best_test_error = np.min(test_err[:, 1])
+        best_test_loss = np.min(test_err[:, 0])
+
+        run_result = {
+            "final_train_error": final_train_error,
+            "final_test_error": final_test_error,
+            "final_train_loss": final_train_loss,
+            "final_test_loss": final_test_loss,
+            "best_train_error": best_train_error,
+            "best_test_error": best_test_error,
+            "best_train_loss": best_train_loss,
+            "best_test_loss": best_test_loss,
+            "train_err_curve": train_err,
+            "test_err_curve": test_err,
+        }
+        results[lr].append(run_result)
+        summary.append(
+            {
+                "lr": lr,
+                "final_train_error": final_train_error,
+                "final_test_error": final_test_error,
+            }
+        )
+    return results, summary
+
+
+def multi_layer_nn(
+    X: np.ndarray,
+    y_ohe: np.ndarray,
+    X_test: np.ndarray,
+    y_test_ohe: np.ndarray,
+    m: int,
+    n: int,
+    K: int,
+) -> dict:
+
+    results = {}
+
+    best_test_error = float("inf")
+    best_train_error = float("inf")
+    best_train_loss = float("inf")
+    best_test_loss = float("inf")
+
+    nnet_metric = LearnNet.NNetMetric(f=nnet_error_rate)
+
+    hidden_layer_units = [4**2, 4**3, 4**4]
+
+    hidden_layers = [1, 2, 3, 4]
+
+    learning_rate_exp = [-2, -1, 0, 1, 2]
+
+    for units, layers, lr_exp in product(
+        hidden_layer_units, hidden_layers, learning_rate_exp
+    ):
+
+        lr = 4**lr_exp
+
+        if lr not in results:
+            results[lr] = []
+
+        nunits = LearnNet.make_nunits(n, K, layers, units)
+
+        nnet_time = LearnNet.time_nnet(nunits)
+
+        R = min(1000, math.ceil(LearnNet.MAX_TIME / (m * nnet_time)))
+
+        opt = LearnNet.NNetGDOptimizer(metric=nnet_metric, max_iters=R, learn_rate=lr)
+
+        nnet = LearnNet.NNet(nunits=nunits)
+
+        best_nnet = nnet.fit(
+            X,
+            y_ohe,
+            X_test,
+            y_test_ohe,
+            optimizer=opt,
+            verbose=1,
         )
 
         train_err = np.array(opt.train_err)
@@ -77,93 +166,6 @@ def perceptron(X: np.ndarray, y_ohe: np.ndarray, K: int, kf: KFold):
     return train_err, test_err
 
 
-def multi_layer_nn(
-    X: np.ndarray,
-    y_ohe: np.ndarray,
-    X_test: np.ndarray,
-    y_test_ohe: np.ndarray,
-    m: int,
-    n: int,
-    K: int,
-    kf: KFold,
-) -> dict:
-    results = {}
-
-    best_test_error = float("inf")
-    best_train_error = float("inf")
-    best_train_loss = float("inf")
-    best_test_loss = float("inf")
-
-    nnet_metric = LearnNet.NNetMetric(f=nnet_error_rate)
-
-    hidden_layer_units = [4**2, 4**3, 4**4]
-
-    hidden_layers = [1, 2, 3, 4]
-
-    learning_rate = [-2, -1, 0, 1, 2]
-
-    for units, layers, lr in product(hidden_layer_units, hidden_layers, learning_rate):
-        # print(f"Units: {units}, Layers: {layers}, Learning Rate: {lr}")
-        if lr not in results:
-            results[lr] = []
-        # for _, (train_idx, val_idx) in enumerate(kf.split(X)):
-
-        #     X_train_fold, X_val_fold = X[train_idx], X[val_idx]
-        #     y_train_fold_ohe, y_val_fold_ohe = y_ohe[train_idx], y_ohe[val_idx]
-
-        nunits = LearnNet.make_nunits(n, K, layers, units)
-
-        nnet_time = LearnNet.time_nnet(nunits)
-
-        R = min(1000, math.ceil(LearnNet.MAX_TIME / (m * nnet_time)))
-
-        opt = LearnNet.NNetGDOptimizer(metric=nnet_metric, max_iters=R, learn_rate=lr)
-
-        nnet = LearnNet.NNet(nunits=nunits)
-        best_nnet = nnet.fit(
-            # X_train_fold,
-            # y_train_fold_ohe,
-            # X_val_fold,
-            # y_val_fold_ohe,
-            X,
-            y_ohe,
-            X_test,
-            y_test_ohe,
-            optimizer=opt,
-            verbose=1,
-        )
-
-        train_err = np.array(opt.train_err)
-        test_err = np.array(opt.test_err)
-
-        # Get the final errors (last iteration)
-        final_train_error = train_err[-1, 1]
-        final_test_error = test_err[-1, 1]
-        final_train_loss = train_err[-1, 0]
-        final_test_loss = test_err[-1, 0]
-
-        # Get the best (minimum) errors during training
-        best_train_error = np.min(train_err[:, 1])
-        best_train_loss = np.min(train_err[:, 0])
-        best_test_error = np.min(test_err[:, 1])
-        best_test_loss = np.min(test_err[:, 0])
-
-        fold_result = {
-            "final_train_error": final_train_error,
-            "final_test_error": final_test_error,
-            "final_train_loss": final_train_loss,
-            "final_test_loss": final_test_loss,
-            "best_train_error": best_train_error,
-            "best_test_error": best_test_error,
-            "best_train_loss": best_train_loss,
-            "best_test_loss": best_test_loss,
-            "train_err": train_err,
-            "test_err": test_err,
-        }
-        results[lr].append(fold_result)
-    return results
-
-
 def two_layer_nn(
     X: np.ndarray,
     y_ohe: np.ndarray,
@@ -172,8 +174,8 @@ def two_layer_nn(
     m: int,
     n: int,
     K: int,
-    kf: KFold,
 ) -> dict:
+
     results = {}
 
     best_test_error = float("inf")
@@ -183,71 +185,73 @@ def two_layer_nn(
 
     nnet_metric = LearnNet.NNetMetric(f=nnet_error_rate)
 
-    hidden_layer_units = [4**3, 4**4, 4**4]
+    first_layer_units = [4**3, 4**4]
+    second_layer_units = [4**2, 4**3]
 
-    hidden_layers = [2]
+    learning_rate_exp = [-3, -2, -1, 0, 1]
 
-    learning_rate = [-2, -1, 0, 1, 2]
+    for lr_exp in learning_rate_exp:
 
-    for units, layers, lr in product(hidden_layer_units, hidden_layers, learning_rate):
-        # print(f"Units: {units}, Layers: {layers}, Learning Rate: {lr}")
+        lr = 4**lr_exp
+
         if lr not in results:
             results[lr] = []
-        # for _, (train_idx, val_idx) in enumerate(kf.split(X)):
 
-        #     X_train_fold, X_val_fold = X[train_idx], X[val_idx]
-        #     y_train_fold_ohe, y_val_fold_ohe = y_ohe[train_idx], y_ohe[val_idx]
+        for first in first_layer_units:
+            for second in second_layer_units:
+                if second >= first:
+                    continue  # ensure the second layer is smaller
 
-        nunits = LearnNet.make_nunits(n, K, layers, units)
+                nunits = [n, first, second, K]  # explicitly define the layer sizes
 
-        nnet_time = LearnNet.time_nnet(nunits)
+                nnet_time = LearnNet.time_nnet(nunits)
 
-        R = min(1000, math.ceil(LearnNet.MAX_TIME / (m * nnet_time)))
+                R = min(1000, math.ceil(LearnNet.MAX_TIME / (m * nnet_time)))
 
-        opt = LearnNet.NNetGDOptimizer(metric=nnet_metric, max_iters=R, learn_rate=lr)
+                opt = LearnNet.NNetGDOptimizer(
+                    metric=nnet_metric, max_iters=R, learn_rate=lr
+                )
 
-        nnet = LearnNet.NNet(nunits=nunits)
-        best_nnet = nnet.fit(
-            # X_train_fold,
-            # y_train_fold_ohe,
-            # X_val_fold,
-            # y_val_fold_ohe,
-            X,
-            y_ohe,
-            X_test,
-            y_test_ohe,
-            optimizer=opt,
-            verbose=1,
-        )
+                nnet = LearnNet.NNet(nunits=nunits)
 
-        train_err = np.array(opt.train_err)
-        test_err = np.array(opt.test_err)
+                best_nnet = nnet.fit(
+                    X,
+                    y_ohe,
+                    X_test,
+                    y_test_ohe,
+                    optimizer=opt,
+                    verbose=1,
+                )
 
-        # Get the final errors (last iteration)
-        final_train_error = train_err[-1, 1]
-        final_test_error = test_err[-1, 1]
-        final_train_loss = train_err[-1, 0]
-        final_test_loss = test_err[-1, 0]
+                train_err = np.array(opt.train_err)
+                test_err = np.array(opt.test_err)
 
-        # Get the best (minimum) errors during training
-        best_train_error = np.min(train_err[:, 1])
-        best_train_loss = np.min(train_err[:, 0])
-        best_test_error = np.min(test_err[:, 1])
-        best_test_loss = np.min(test_err[:, 0])
+                # Get the final errors (last iteration)
+                final_train_error = train_err[-1, 1]
+                final_test_error = test_err[-1, 1]
+                final_train_loss = train_err[-1, 0]
+                final_test_loss = test_err[-1, 0]
 
-        fold_result = {
-            "final_train_error": final_train_error,
-            "final_test_error": final_test_error,
-            "final_train_loss": final_train_loss,
-            "final_test_loss": final_test_loss,
-            "best_train_error": best_train_error,
-            "best_test_error": best_test_error,
-            "best_train_loss": best_train_loss,
-            "best_test_loss": best_test_loss,
-            "train_err": train_err,
-            "test_err": test_err,
-        }
-        results[lr].append(fold_result)
+                # Get the best (minimum) errors during training
+                best_train_error = np.min(train_err[:, 1])
+                best_train_loss = np.min(train_err[:, 0])
+                best_test_error = np.min(test_err[:, 1])
+                best_test_loss = np.min(test_err[:, 0])
+
+                fold_result = {
+                    "final_train_error": final_train_error,
+                    "final_test_error": final_test_error,
+                    "final_train_loss": final_train_loss,
+                    "final_test_loss": final_test_loss,
+                    "best_train_error": best_train_error,
+                    "best_test_error": best_test_error,
+                    "best_train_loss": best_train_loss,
+                    "best_test_loss": best_test_loss,
+                    "train_err": train_err,
+                    "test_err": test_err,
+                }
+                results[lr].append(fold_result)
+
     return results
 
 
@@ -315,7 +319,25 @@ if __name__ == "__main__":
     #           Gradient Descent                #
     #   Learning Rate [4^0, 4^1, 4^2, 4^3, 4^4] #
     #############################################
-    train_err, test_err = perceptron(X, y_ohe, K, kf)
+
+    fold_train_errors = []
+    fold_val_errors = []
+
+    for i, (train_idx, val_idx) in enumerate(kf.split(X)):
+
+        # 1. Split into training and validation subsets
+        X_train_fold, X_val_fold = X[train_idx], X[val_idx]
+        y_train_fold_ohe, y_val_fold_ohe = y_ohe[train_idx], y_ohe[val_idx]
+
+        # 2. Train the model using the fold's train set
+
+        results, summary = perceptron(
+            X_train_fold,
+            y_train_fold_ohe,
+            X_val_fold,
+            y_val_fold_ohe,
+            K,
+        )
 
     #############################################
     #   Deep Neural Network                     #
@@ -324,7 +346,9 @@ if __name__ == "__main__":
     #   Learning Rate [-1, -1, 0, 1, 2]         #
     #############################################
 
-    # mlp_nn_results = multi_layer_nn(X, y_ohe, X_test, y_test_ohe, m, n, K, kf)
+    # mlp_train_err, mlp_test_err = multi_layer_nn(
+    # X, y_ohe, X_test, y_test_ohe, m, n, K, kf
+    # )
 
     ###############################################
     #   Deep Neural Network                       #
@@ -333,7 +357,9 @@ if __name__ == "__main__":
     #   Learning Rate [-3, -2, -1, 0, 1]          #
     ###############################################
 
-    # deep_nn_2_layer_results = two_layer_nn(X, y_ohe, X_test, y_test_ohe, m, n, K, kf)
+    # two_layer_train_err, two_layer_test_err = two_layer_nn(
+    #     X, y_ohe, X_test, y_test_ohe, m, n, K, kf
+    # )
 
     breakpoint()
     # -----------------------------------
