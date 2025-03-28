@@ -1,9 +1,9 @@
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
+import seaborn as sns
 
 import LearnNet
-import seaborn as sns
 
 
 def summarize_results(results: dict) -> dict:
@@ -55,7 +55,7 @@ def print_cv_summary(arch_name, cv_results, duration):
         )
     print(f"\nBest LR: {cv_results['best_lr']}")
     print(f"Best Configurations: {cv_results['configs_chosen']}")
-    print(f"🕒 {arch_name} CV completed in {duration/60:.2f} minutes.")
+    print(f" {arch_name} CV completed in {duration/60:.2f} minutes.")
 
 
 def tabulate_and_plot_cv_errors(
@@ -76,24 +76,24 @@ def tabulate_and_plot_cv_errors(
                 }
             )
 
-    # Create DataFrame clearly for tabulation
+    # Create DataFrame
     df = pd.DataFrame(records)
 
-    # Tabulate results explicitly
+    # Tabulate results
     pivot_df = df.pivot(
         index="Learning Rate",
         columns="Architecture",
         values="Avg CV Test Misclassification Error",
     ).round(4)
 
-    print("\n📊 Average CV Test Misclassification Errors:")
+    print("\n Average CV Test Misclassification Errors:")
     print(pivot_df)
 
-    # Save the tabulated results clearly as CSV
+    # Save the tabulated results as CSV
     pivot_df.to_csv(csv_save_path)
-    print(f"\n💾 CV results summary saved to '{csv_save_path}'.")
+    print(f"\n CV results summary saved to '{csv_save_path}'.")
 
-    # Plotting results clearly
+    # Plotting results
     plt.figure(figsize=(10, 6))
     sns.barplot(
         data=df,
@@ -109,9 +109,9 @@ def tabulate_and_plot_cv_errors(
     plt.legend(title="Architecture")
     plt.tight_layout()
 
-    # Save the plot explicitly as an image file
+    # Save the plot as an image file
     plt.savefig(plot_save_path)
-    print(f"💾 CV results plot saved to '{plot_save_path}'.")
+    print(f"CV results plot saved to '{plot_save_path}'.")
 
     plt.show()
 
@@ -129,11 +129,11 @@ def tabulate_final_results(train_curve, test_curve, save_path="final_results.csv
 
     df_results = pd.DataFrame(final_results).round(4)
 
-    print("\n📌 Final Neural Network Performance:")
+    print("\n Final Neural Network Performance:")
     print(df_results)
 
     df_results.to_csv(save_path, index=False)
-    print(f"\n💾 Final results saved to '{save_path}'.")
+    print(f"\n Final results saved to '{save_path}'.")
 
 
 def plot_and_save_final_curves(
@@ -169,8 +169,8 @@ def plot_and_save_final_curves(
 
     plt.tight_layout()
 
-    # Save plots clearly
+    # Save plots
     plt.savefig(save_path)
-    print(f"\n💾 Training plots saved to '{save_path}'.")
+    print(f"\n Training plots saved to '{save_path}'.")
 
     plt.show()

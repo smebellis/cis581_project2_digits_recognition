@@ -1,19 +1,27 @@
 import math
 from collections import defaultdict
-import pandas as pd
 
 import numpy as np
+import pandas as pd
 
 import LearnNet
 from helper import make_nnet_error_rate
 
 
-def train_network(X, y_ohe, X_test, y_test_ohe, layer_sizes, lr, max_iters, out_enc):
+def train_network(
+    X, y_ohe, X_test, y_test_ohe, layer_sizes, lr, max_iters, out_enc, debug=False
+):
     nnet_metric = LearnNet.NNetMetric(f=make_nnet_error_rate(out_enc))
     nnet = LearnNet.NNet(nunits=layer_sizes)
     opt = LearnNet.NNetGDOptimizer(
         metric=nnet_metric, max_iters=max_iters, learn_rate=lr
     )
+
+    if debug:
+        X = X[:100]
+        y_ohe = y_ohe[:100]
+        X_test = X_test[:100]
+        y_test_ohe = y_test_ohe[:100]
 
     best_nnet = nnet.fit(X, y_ohe, X_test, y_test_ohe, optimizer=opt, verbose=0)
 
@@ -37,8 +45,17 @@ def train_network(X, y_ohe, X_test, y_test_ohe, layer_sizes, lr, max_iters, out_
     return results
 
 
-def evaluate_models(X, y_ohe, X_test, y_test_ohe, m, configs, out_enc, max_iters=50):
+def evaluate_models(
+    X, y_ohe, X_test, y_test_ohe, m, configs, out_enc, max_iters=50, debug=False
+):
     results = []
+
+    if debug:
+        X = X[:100]
+        y_ohe = y_ohe[:100]
+        X_test = X_test[:100]
+        y_test_ohe = y_test_ohe[:100]
+
     for config in configs:
         layer_sizes, lr = config["layer_sizes"], config["lr"]
 
@@ -60,12 +77,16 @@ def evaluate_models(X, y_ohe, X_test, y_test_ohe, m, configs, out_enc, max_iters
     return results
 
 
-def train_cv(X, y_ohe, kf, configs, out_enc):
+def train_cv(X, y_ohe, kf, configs, out_enc, debug=False):
     fold_train_errors = defaultdict(list)
     fold_val_errors = defaultdict(list)
     fold_train_losses = defaultdict(list)
     fold_val_losses = defaultdict(list)
     best_config_for_lr = defaultdict(list)
+
+    if debug:
+        X = X[:100]
+        y_ohe = y_ohe[:100]
 
     for train_idx, val_idx in kf.split(X):
 
@@ -132,12 +153,11 @@ def train_cv(X, y_ohe, kf, configs, out_enc):
 def evaluate_trial_dataset(
     final_nnet, X_trial, y_trial, out_enc, results_save_path="trial_dataset_results.csv"
 ):
-    """
-    Evaluates each example in the trial dataset using the final neural network.
-    Displays classification output clearly and saves results explicitly.
-    """
+
     # Forward pass to get predicted probabilities
-    y_pred_probs = final_nnet.predict(X_trial.T)  # assuming shape (features, samples)
+    y_pred_probs = final_nnet.forwardprop(
+        X_trial.T
+    )  # assuming shape (features, samples)
 
     # Predicted labels
     y_pred_labels = np.argmax(y_pred_probs, axis=0)
@@ -155,10 +175,10 @@ def evaluate_trial_dataset(
         }
     )
 
-    # Display results clearly
-    print("\n🔍 Trial Dataset Evaluation:")
+    # Display results
+    print("\n Trial Dataset Evaluation:")
     print(df_results)
 
-    # Save results explicitly as CSV
+    # Save results as CSV
     df_results.to_csv(results_save_path, index=False)
-    print(f"\n💾 Trial dataset evaluation results saved to '{results_save_path}'.")
+    print(f"\n Trial dataset evaluation results saved to '{results_save_path}'.")

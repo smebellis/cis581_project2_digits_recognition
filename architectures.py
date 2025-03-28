@@ -368,7 +368,6 @@ def two_layer_single_lr(
     lr: float,
 ) -> dict:
 
-    # Define your metric (or accept it as a parameter)
     nnet_metric = LearnNet.NNetMetric(f=nnet_error_rate)
 
     # Explicitly define the layer sizes: [input_dim, first_hidden, second_hidden, output_dim]

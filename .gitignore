@@ -1,2 +1,5 @@
 *.dat
 *.ipynb
+*.pkl
+*.csv
+*.png

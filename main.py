@@ -4,21 +4,17 @@ import time
 import warnings
 from collections import Counter
 from itertools import product
-import pandas as pd
 
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 from sklearn.model_selection import KFold
 from sklearn.preprocessing import LabelBinarizer
 
 import LearnNet
-from helper import (
-    print_cv_summary,
-    tabulate_and_plot_cv_errors,
-    tabulate_final_results,
-    plot_and_save_final_curves,
-)
-from train import train_cv, train_network, evaluate_trial_dataset
+from helper import (plot_and_save_final_curves, print_cv_summary,
+                    tabulate_and_plot_cv_errors, tabulate_final_results)
+from train import evaluate_trial_dataset, train_cv, train_network
 
 warnings.filterwarnings(
     "ignore", category=RuntimeWarning, message="overflow encountered in exp"
@@ -26,58 +22,60 @@ warnings.filterwarnings(
 
 RESULTS_FILE = "best_model_results.pkl"
 
+# Change to False for final run
+# True means it runs on 100 samples.
+DEBUG = True
+
 if __name__ == "__main__":
-    # Check if results already exist
+
+    # Load datasets
+    dataset_train = np.loadtxt("optdigits_train.dat")
+    dataset_test = np.loadtxt("optdigits_test.dat")
+    dataset_trial = np.loadtxt("optdigits_trial.dat")
+
+    m, n = (
+        dataset_train.shape[0],
+        dataset_train.shape[1] - 1,
+    )  # Get number of samples and features
+
+    X = dataset_train[:, :-1].reshape(m, n)  # Extract features from training dataset
+    y = dataset_train[:, -1].reshape(m, 1)  # Extract labels from training dataset
+
+    out_enc = LabelBinarizer()  # Initialize label binarizer for one-hot encoding
+    y_ohe = out_enc.fit_transform(y)  # One-hot encode training labels
+
+    K = y_ohe.shape[1]  # Number of unique classes in the dataset
+
+    m_test = dataset_test.shape[0]  # Get number of samples in the test dataset
+
+    X_test = dataset_test[:, :-1].reshape(
+        m_test, n
+    )  # Extract features from test dataset
+    y_test = dataset_test[:, -1].reshape(m_test, 1)  # Extract labels from test dataset
+
+    y_test_ohe = out_enc.transform(y_test)  # One-hot encode test labels
+    m_trial = dataset_trial.shape[0]  # Get number of samples in the trial dataset
+    n_trial = dataset_trial.shape[1] - 1
+    X_trial = dataset_trial[:, :-1].reshape(
+        m_trial, n_trial
+    )  # Extract features from trial dataset
+    y_trial = dataset_trial[:, -1].reshape(
+        m_trial, 1
+    )  # Extract labels from trial dataset
+    y_trial_ohe = out_enc.transform(y_trial)  # One-hot encode trial labels
+
+    # Load results from Pickle File
     if os.path.exists(RESULTS_FILE):
-        print("\n✅ Saved results found. Loading...")
+        print("\n Saved results found. Loading...")
         with open(RESULTS_FILE, "rb") as f:
             saved_results = pickle.load(f)
 
         best_architecture_parameters = saved_results["best_params"]
         final_run = saved_results["final_run"]
+        out_enc = saved_results["out_enc"]
 
     else:
-        print("\n❌ No saved results found. Starting training...")
-        dataset_train = np.loadtxt("optdigits_train.dat")  # Load training dataset
-        dataset_test = np.loadtxt("optdigits_test.dat")  # Load testing dataset
-        dataset_trial = np.loadtxt("optdigits_trial.dat")  # Load trial dataset
-
-        m, n = (
-            dataset_train.shape[0],
-            dataset_train.shape[1] - 1,
-        )  # Get number of samples and features
-
-        X = dataset_train[:, :-1].reshape(
-            m, n
-        )  # Extract features from training dataset
-        y = dataset_train[:, -1].reshape(m, 1)  # Extract labels from training dataset
-
-        out_enc = LabelBinarizer()  # Initialize label binarizer for one-hot encoding
-        y_ohe = out_enc.fit_transform(y)  # One-hot encode training labels
-
-        K = y_ohe.shape[1]  # Number of unique classes in the dataset
-
-        m_test = dataset_test.shape[0]  # Get number of samples in the test dataset
-
-        X_test = dataset_test[:, :-1].reshape(
-            m_test, n
-        )  # Extract features from test dataset
-        y_test = dataset_test[:, -1].reshape(
-            m_test, 1
-        )  # Extract labels from test dataset
-
-        y_test_ohe = out_enc.transform(y_test)  # One-hot encode test labels
-
-        m_trial = dataset_trial.shape[0]  # Get number of samples in the trial dataset
-
-        X_trial = dataset_trial[:, :-1].reshape(
-            m_trial, n
-        )  # Extract features from trial dataset
-        y_trial = dataset_trial[:, -1].reshape(
-            m_trial, 1
-        )  # Extract labels from trial dataset
-
-        y_trial_ohe = out_enc.transform(y_trial)  # One-hot encode trial labels
+        print("\n No saved results found. Starting training...")
 
         kf = KFold(n_splits=3, random_state=42, shuffle=True)
 
@@ -106,9 +104,9 @@ if __name__ == "__main__":
         # ---------------------#
 
         # Cross-validation: Perceptron
-        print("\n🟢 Starting Perceptron CV...")
+        print("\n Starting Perceptron CV...")
         start_time = time.time()
-        perceptron_cv = train_cv(X, y_ohe, kf, perceptron_configs, out_enc)
+        perceptron_cv = train_cv(X, y_ohe, kf, perceptron_configs, out_enc, debug=DEBUG)
         perceptron_duration = time.time() - start_time
         print_cv_summary("Perceptron", perceptron_cv, perceptron_duration)
 
@@ -117,9 +115,9 @@ if __name__ == "__main__":
         # ---------------------#
 
         # Cross-validation: Multi-Layer NN
-        print("\n🟢 Starting Multi-Layer NN CV...")
+        print("\n Starting Multi-Layer NN CV...")
         start_time = time.time()
-        multi_cv = train_cv(X, y_ohe, kf, multi_layer_configs, out_enc)
+        multi_cv = train_cv(X, y_ohe, kf, multi_layer_configs, out_enc, debug=DEBUG)
         multi_duration = time.time() - start_time
         print_cv_summary("Multi-Layer NN", multi_cv, multi_duration)
 
@@ -128,15 +126,15 @@ if __name__ == "__main__":
         # ---------------------#
 
         # Cross-validation: Two-Layer NN
-        print("\n🟢 Starting Two-Layer NN CV...")
+        print("\n Starting Two-Layer NN CV...")
         start_time = time.time()
-        two_layer_cv = train_cv(X, y_ohe, kf, two_layer_configs, out_enc)
+        two_layer_cv = train_cv(X, y_ohe, kf, two_layer_configs, out_enc, debug=DEBUG)
         two_layer_duration = time.time() - start_time
         print_cv_summary("Two-Layer NN", two_layer_cv, two_layer_duration)
 
         overall_duration = time.time() - overall_start_time
         print(
-            f"\n✅ Total CV runtime for all architectures: {overall_duration/60:.2f} minutes."
+            f"\n Total CV runtime for all architectures: {overall_duration/60:.2f} minutes."
         )
 
         # ----------------------#
@@ -171,9 +169,12 @@ if __name__ == "__main__":
         )
 
         best_lr = best_cv["best_lr"]
-        best_config = Counter(best_cv["configs_chosen"]).most_common(1)[0][0]
+        # best_config = Counter(best_cv["configs_chosen"]).most_common(1)[0][0]
+        best_config = Counter(
+            tuple(config) for config in best_cv["configs_chosen"]
+        ).most_common(1)[0][0]
 
-        print("\n✅ === Best Architecture Selected ===")
+        print("\n === Best Architecture Selected ===")
         print(f"Architecture: {best_arch}")
         print(f"Best Learning Rate: {best_lr}")
         print(f"Best Layer Sizes: {best_config}")
@@ -188,7 +189,7 @@ if __name__ == "__main__":
         }
 
         # Final Training
-        print("\n🔵 Starting Final Training...")
+        print("\n Starting Final Training...")
         final_run = train_network(
             X,
             y_ohe,
@@ -198,6 +199,7 @@ if __name__ == "__main__":
             best_lr,
             max_iters=1000,
             out_enc=out_enc,
+            debug=DEBUG,
         )
 
         # Save results to disk
@@ -205,12 +207,13 @@ if __name__ == "__main__":
             "best_params": best_architecture_parameters,
             "final_run": final_run,
             "cv_results_all": cv_results_all,
+            "out_enc": out_enc,
         }
 
         with open(RESULTS_FILE, "wb") as f:
             pickle.dump(saved_results, f)
 
-        print("\n💾 Results saved successfully!")
+        print("\n Results saved successfully!")
 
         # Plotting final run
         train_curve, test_curve = (
@@ -234,11 +237,11 @@ if __name__ == "__main__":
 
         total_runtime = time.time() - overall_start_time
         print(
-            f"\n🚩 Total Runtime (CV + Final Training): {total_runtime/60:.2f} minutes."
+            f"\n Total Runtime (CV + Final Training): {total_runtime/60:.2f} minutes."
         )
 
         # Display best parameters
-        print("\n🎯 === Best Architecture Parameters ===")
+        print("\n === Best Architecture Parameters ===")
         for key, value in best_architecture_parameters.items():
             print(f"{key.capitalize()}: {value}")
 
@@ -246,75 +249,70 @@ if __name__ == "__main__":
         #   Evaluate Trial Dataset    #
         # ----------------------------#
 
-        evaluate_trial_dataset(
-            final_nnet=final_run["trained_model"],  # use your final trained model
-            X_trial=X_trial,
-            y_trial=y_trial,
+    evaluate_trial_dataset(
+        final_nnet=final_run["trained_model"],
+        X_trial=X_trial,
+        y_trial=y_trial,
+        out_enc=out_enc,
+        results_save_path="trial_dataset_results.csv",
+    )
+
+    # ----------------------------#
+    #   Learning Curve            #
+    # ----------------------------#
+
+    train_sizes = [10, 40, 100, 200, 400, 800, 1600]
+    results = []
+
+    for m_current in train_sizes:
+        X_subset = X[:m_current]
+        y_subset_ohe = y_ohe[:m_current]
+
+        # Train model explicitly on current subset
+        final_run_subset = train_network(
+            X_subset,
+            y_subset_ohe,
+            X_test,
+            y_test_ohe,
+            best_architecture_parameters["layer_sizes"],
+            best_architecture_parameters["best_lr"],
+            max_iters=1000,
             out_enc=out_enc,
-            results_save_path="trial_dataset_results.csv",
+            debug=DEBUG,
         )
 
-        # ----------------------------#
-        #   Learning Curve            #
-        # ----------------------------#
+        results.append(
+            {
+                "m": m_current,
+                "train_error": final_run_subset["train_err_curve"][-1, 1],
+                "test_error": final_run_subset["test_err_curve"][-1, 1],
+                "train_loss": final_run_subset["train_err_curve"][-1, 0],
+                "test_loss": final_run_subset["test_err_curve"][-1, 0],
+            }
+        )
 
-        train_sizes = [10, 40, 100, 200, 400, 800, 1600]
-        results = []
+    df_results = pd.DataFrame(results)
 
-        for m_current in train_sizes:
-            X_subset = X[:m_current]
-            y_subset_ohe = y_ohe[:m_current]
+    plt.figure(figsize=(10, 5))
+    plt.plot(df_results["m"], df_results["train_error"], "o-", label="Training Error")
+    plt.plot(df_results["m"], df_results["test_error"], "s-", label="Test Error")
+    plt.title("Learning Curve (Misclassification Error)")
+    plt.xlabel("Number of Training Examples (m)")
+    plt.ylabel("Misclassification Error")
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig("learning_curve_misclassification_error.png")
+    plt.show()
 
-            # Train model explicitly on current subset
-            final_run_subset = train_network(
-                X_subset,
-                y_subset_ohe,
-                X_test,
-                y_test_ohe,
-                best_architecture_parameters["layer_sizes"],
-                best_architecture_parameters["best_lr"],
-                max_iters=1000,
-                out_enc=out_enc,
-            )
-
-            results.append(
-                {
-                    "m": m_current,
-                    "train_error": final_run_subset["train_err_curve"][-1, 1],
-                    "test_error": final_run_subset["test_err_curve"][-1, 1],
-                    "train_loss": final_run_subset["train_err_curve"][-1, 0],
-                    "test_loss": final_run_subset["test_err_curve"][-1, 0],
-                }
-            )
-
-            df_results = pd.DataFrame(results)
-
-            plt.figure(figsize=(10, 5))
-            plt.plot(
-                df_results["m"], df_results["train_error"], "o-", label="Training Error"
-            )
-            plt.plot(
-                df_results["m"], df_results["test_error"], "s-", label="Test Error"
-            )
-            plt.title("Learning Curve (Misclassification Error)")
-            plt.xlabel("Number of Training Examples (m)")
-            plt.ylabel("Misclassification Error")
-            plt.legend()
-            plt.grid(True)
-            plt.tight_layout()
-            plt.savefig("learning_curve_misclassification_error.png")
-            plt.show()
-
-            plt.figure(figsize=(10, 5))
-            plt.plot(
-                df_results["m"], df_results["train_loss"], "o-", label="Training Loss"
-            )
-            plt.plot(df_results["m"], df_results["test_loss"], "s-", label="Test Loss")
-            plt.title("Learning Curve (Proxy Error/Loss)")
-            plt.xlabel("Number of Training Examples (m)")
-            plt.ylabel("Loss")
-            plt.legend()
-            plt.grid(True)
-            plt.tight_layout()
-            plt.savefig("learning_curve_proxy_error.png")
-            plt.show()
+    plt.figure(figsize=(10, 5))
+    plt.plot(df_results["m"], df_results["train_loss"], "o-", label="Training Loss")
+    plt.plot(df_results["m"], df_results["test_loss"], "s-", label="Test Loss")
+    plt.title("Learning Curve (Proxy Error/Loss)")
+    plt.xlabel("Number of Training Examples (m)")
+    plt.ylabel("Loss")
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig("learning_curve_proxy_error.png")
+    plt.show()
