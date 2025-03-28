@@ -4,6 +4,7 @@ import time
 import warnings
 from collections import Counter
 from itertools import product
+import pandas as pd
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -241,6 +242,10 @@ if __name__ == "__main__":
         for key, value in best_architecture_parameters.items():
             print(f"{key.capitalize()}: {value}")
 
+        # ----------------------------#
+        #   Evaluate Trial Dataset    #
+        # ----------------------------#
+
         evaluate_trial_dataset(
             final_nnet=final_run["trained_model"],  # use your final trained model
             X_trial=X_trial,
@@ -248,3 +253,68 @@ if __name__ == "__main__":
             out_enc=out_enc,
             results_save_path="trial_dataset_results.csv",
         )
+
+        # ----------------------------#
+        #   Learning Curve            #
+        # ----------------------------#
+
+        train_sizes = [10, 40, 100, 200, 400, 800, 1600]
+        results = []
+
+        for m_current in train_sizes:
+            X_subset = X[:m_current]
+            y_subset_ohe = y_ohe[:m_current]
+
+            # Train model explicitly on current subset
+            final_run_subset = train_network(
+                X_subset,
+                y_subset_ohe,
+                X_test,
+                y_test_ohe,
+                best_architecture_parameters["layer_sizes"],
+                best_architecture_parameters["best_lr"],
+                max_iters=1000,
+                out_enc=out_enc,
+            )
+
+            results.append(
+                {
+                    "m": m_current,
+                    "train_error": final_run_subset["train_err_curve"][-1, 1],
+                    "test_error": final_run_subset["test_err_curve"][-1, 1],
+                    "train_loss": final_run_subset["train_err_curve"][-1, 0],
+                    "test_loss": final_run_subset["test_err_curve"][-1, 0],
+                }
+            )
+
+            df_results = pd.DataFrame(results)
+
+            plt.figure(figsize=(10, 5))
+            plt.plot(
+                df_results["m"], df_results["train_error"], "o-", label="Training Error"
+            )
+            plt.plot(
+                df_results["m"], df_results["test_error"], "s-", label="Test Error"
+            )
+            plt.title("Learning Curve (Misclassification Error)")
+            plt.xlabel("Number of Training Examples (m)")
+            plt.ylabel("Misclassification Error")
+            plt.legend()
+            plt.grid(True)
+            plt.tight_layout()
+            plt.savefig("learning_curve_misclassification_error.png")
+            plt.show()
+
+            plt.figure(figsize=(10, 5))
+            plt.plot(
+                df_results["m"], df_results["train_loss"], "o-", label="Training Loss"
+            )
+            plt.plot(df_results["m"], df_results["test_loss"], "s-", label="Test Loss")
+            plt.title("Learning Curve (Proxy Error/Loss)")
+            plt.xlabel("Number of Training Examples (m)")
+            plt.ylabel("Loss")
+            plt.legend()
+            plt.grid(True)
+            plt.tight_layout()
+            plt.savefig("learning_curve_proxy_error.png")
+            plt.show()
