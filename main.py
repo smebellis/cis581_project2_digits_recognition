@@ -17,7 +17,7 @@ from helper import (
     tabulate_final_results,
     plot_and_save_final_curves,
 )
-from train import train_cv, train_network
+from train import train_cv, train_network, evaluate_trial_dataset
 
 warnings.filterwarnings(
     "ignore", category=RuntimeWarning, message="overflow encountered in exp"
@@ -148,8 +148,11 @@ if __name__ == "__main__":
             "Two-Layer NN": two_layer_cv,
         }
 
-        tabulate_and_plot_cv_errors(cv_results_all)
-        # TODO: Save plot
+        tabulate_and_plot_cv_errors(
+            cv_results_all,
+            csv_save_path="cv_results_summary.csv",
+            plot_save_path="cv_results_plot.png",
+        )
 
         # -------------------------------------------------------#
         #   Model Selection based on Misclassification Error     #
@@ -237,3 +240,11 @@ if __name__ == "__main__":
         print("\n🎯 === Best Architecture Parameters ===")
         for key, value in best_architecture_parameters.items():
             print(f"{key.capitalize()}: {value}")
+
+        evaluate_trial_dataset(
+            final_nnet=final_run["trained_model"],  # use your final trained model
+            X_trial=X_trial,
+            y_trial=y_trial,
+            out_enc=out_enc,
+            results_save_path="trial_dataset_results.csv",
+        )

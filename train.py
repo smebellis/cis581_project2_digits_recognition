@@ -1,5 +1,6 @@
 import math
 from collections import defaultdict
+import pandas as pd
 
 import numpy as np
 
@@ -20,6 +21,7 @@ def train_network(X, y_ohe, X_test, y_test_ohe, layer_sizes, lr, max_iters, out_
     test_err = np.array(opt.test_err)
 
     results = {
+        "trained_model": best_nnet,
         "final_train_error": train_err[-1, 1],
         "final_test_error": test_err[-1, 1],
         "final_train_loss": train_err[-1, 0],
@@ -125,3 +127,38 @@ def train_cv(X, y_ohe, kf, configs, out_enc):
         "lowest_val_error": lowest_val_error,
         "configs_chosen": best_configs_chosen,
     }
+
+
+def evaluate_trial_dataset(
+    final_nnet, X_trial, y_trial, out_enc, results_save_path="trial_dataset_results.csv"
+):
+    """
+    Evaluates each example in the trial dataset using the final neural network.
+    Displays classification output clearly and saves results explicitly.
+    """
+    # Forward pass to get predicted probabilities
+    y_pred_probs = final_nnet.predict(X_trial.T)  # assuming shape (features, samples)
+
+    # Predicted labels
+    y_pred_labels = np.argmax(y_pred_probs, axis=0)
+
+    # True labels
+    y_true_labels = y_trial.flatten().astype(int)
+
+    # Prepare results for tabulation
+    df_results = pd.DataFrame(
+        {
+            "Example #": np.arange(1, len(y_trial) + 1),
+            "True Label": y_true_labels,
+            "Predicted Label": y_pred_labels,
+            "Correct Prediction": (y_true_labels == y_pred_labels),
+        }
+    )
+
+    # Display results clearly
+    print("\n🔍 Trial Dataset Evaluation:")
+    print(df_results)
+
+    # Save results explicitly as CSV
+    df_results.to_csv(results_save_path, index=False)
+    print(f"\n💾 Trial dataset evaluation results saved to '{results_save_path}'.")
