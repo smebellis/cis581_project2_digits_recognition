@@ -1,0 +1,127 @@
+import math
+from collections import defaultdict
+
+import numpy as np
+
+import LearnNet
+from helper import make_nnet_error_rate
+
+
+def train_network(X, y_ohe, X_test, y_test_ohe, layer_sizes, lr, max_iters, out_enc):
+    nnet_metric = LearnNet.NNetMetric(f=make_nnet_error_rate(out_enc))
+    nnet = LearnNet.NNet(nunits=layer_sizes)
+    opt = LearnNet.NNetGDOptimizer(
+        metric=nnet_metric, max_iters=max_iters, learn_rate=lr
+    )
+
+    best_nnet = nnet.fit(X, y_ohe, X_test, y_test_ohe, optimizer=opt, verbose=0)
+
+    train_err = np.array(opt.train_err)
+    test_err = np.array(opt.test_err)
+
+    results = {
+        "final_train_error": train_err[-1, 1],
+        "final_test_error": test_err[-1, 1],
+        "final_train_loss": train_err[-1, 0],
+        "final_test_loss": test_err[-1, 0],
+        "best_train_error": np.min(train_err[:, 1]),
+        "best_test_error": np.min(test_err[:, 1]),
+        "best_train_loss": np.min(train_err[:, 0]),
+        "best_test_loss": np.min(test_err[:, 0]),
+        "train_err_curve": train_err,
+        "test_err_curve": test_err,
+    }
+
+    return results
+
+
+def evaluate_models(X, y_ohe, X_test, y_test_ohe, m, configs, out_enc, max_iters=50):
+    results = []
+    for config in configs:
+        layer_sizes, lr = config["layer_sizes"], config["lr"]
+
+        nnet_time = LearnNet.time_nnet(layer_sizes)
+        adjusted_max_iters = min(1000, math.ceil(LearnNet.MAX_TIME / (m * nnet_time)))
+
+        run_result = train_network(
+            X, y_ohe, X_test, y_test_ohe, layer_sizes, lr, adjusted_max_iters, out_enc
+        )
+
+        results.append(
+            {
+                "layer_sizes": layer_sizes,
+                "lr": lr,
+                **run_result,
+            }
+        )
+
+    return results
+
+
+def train_cv(X, y_ohe, kf, configs, out_enc):
+    fold_train_errors = defaultdict(list)
+    fold_val_errors = defaultdict(list)
+    fold_train_losses = defaultdict(list)
+    fold_val_losses = defaultdict(list)
+    best_config_for_lr = defaultdict(list)
+
+    for train_idx, val_idx in kf.split(X):
+
+        # Split data into folds
+        X_train_fold, X_val_fold = X[train_idx], X[val_idx]
+        y_train_fold_ohe, y_val_fold_ohe = y_ohe[train_idx], y_ohe[val_idx]
+
+        # Train neural network models on current fold
+        fold_results = evaluate_models(
+            X_train_fold,
+            y_train_fold_ohe,
+            X_val_fold,
+            y_val_fold_ohe,
+            len(train_idx),
+            configs,
+            out_enc,
+        )
+
+        # Store fold metrics
+        for run_result in fold_results:
+            lr_value = run_result["lr"]
+
+            fold_train_errors[lr_value].append(run_result["final_train_error"])
+            fold_val_errors[lr_value].append(run_result["final_test_error"])
+            fold_train_losses[lr_value].append(run_result["final_train_loss"])
+            fold_val_losses[lr_value].append(run_result["final_test_loss"])
+
+            config = run_result.get("layer_sizes")
+            if config:
+                best_config_for_lr[lr_value].append(config)
+
+    # Compute average metrics across all folds
+    summary_metrics = {}
+    lowest_val_error = float("inf")
+    best_lr = None
+
+    for lr_value in fold_train_errors.keys():
+        mean_train_err = np.mean(fold_train_errors[lr_value])
+        mean_val_err = np.mean(fold_val_errors[lr_value])
+        mean_train_loss = np.mean(fold_train_losses[lr_value])
+        mean_val_loss = np.mean(fold_val_losses[lr_value])
+
+        summary_metrics[lr_value] = {
+            "mean_train_err": mean_train_err,
+            "mean_val_err": mean_val_err,
+            "mean_train_loss": mean_train_loss,
+            "mean_val_loss": mean_val_loss,
+        }
+
+        if mean_val_err < lowest_val_error:
+            lowest_val_error = mean_val_err
+            best_lr = lr_value
+
+    best_configs_chosen = best_config_for_lr[best_lr]
+
+    return {
+        "summary_metrics": summary_metrics,
+        "best_lr": best_lr,
+        "lowest_val_error": lowest_val_error,
+        "configs_chosen": best_configs_chosen,
+    }
