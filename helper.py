@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
+import math
 
 import LearnNet
 
@@ -173,4 +174,40 @@ def plot_and_save_final_curves(
     plt.savefig(save_path)
     print(f"\n Training plots saved to '{save_path}'.")
 
+    plt.show()
+
+
+def plot_output_weights(
+    final_run,
+    filename="final_perceptron_output_weights.png",
+    cmap="gray",
+    ncols=5,
+    reshape_size=(32, 32),
+):
+    K = final_run["trained_model"].nunits[-1]
+
+    # Calculate number of rows needed based on number of columns
+    nrows = math.ceil(K / ncols)
+
+    # Create the grid of subplots
+    fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(3 * ncols, 3 * nrows))
+
+    # Flatten the axes array
+    axes = axes.flatten()
+
+    # Loop over each output unit, reshape its weights, and plot
+    for out_unit in range(K):
+        # Get weight vector for current output unit and skip bias (first column)
+        w = final_run["trained_model"].layer[-1].W[out_unit, 1:]
+        ax = axes[out_unit]
+        ax.imshow(w.reshape(reshape_size), cmap=cmap)
+        ax.set_title(f"Output unit {out_unit}")
+        ax.axis("off")  # Hide axis ticks and labels
+
+    # Hide any extra subplots that are not used
+    for i in range(K, len(axes)):
+        axes[i].axis("off")
+
+    plt.tight_layout()
+    plt.savefig(filename, dpi=300)
     plt.show()
