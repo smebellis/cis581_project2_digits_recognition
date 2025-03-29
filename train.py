@@ -7,6 +7,9 @@ import pandas as pd
 import LearnNet
 from utils import make_nnet_error_rate
 
+# Size of Subset for debugging
+SIZE = 5
+
 
 def train_network(
     X, y_ohe, X_test, y_test_ohe, layer_sizes, lr, max_iters, out_enc, debug=False
@@ -18,10 +21,11 @@ def train_network(
     )
 
     if debug:
-        X = X[:100]
-        y_ohe = y_ohe[:100]
-        X_test = X_test[:100]
-        y_test_ohe = y_test_ohe[:100]
+
+        X = X[:SIZE]
+        y_ohe = y_ohe[:SIZE]
+        X_test = X_test[:SIZE]
+        y_test_ohe = y_test_ohe[:SIZE]
 
     best_nnet = nnet.fit(X, y_ohe, X_test, y_test_ohe, optimizer=opt, verbose=0)
 
@@ -51,10 +55,10 @@ def evaluate_models(
     results = []
 
     if debug:
-        X = X[:100]
-        y_ohe = y_ohe[:100]
-        X_test = X_test[:100]
-        y_test_ohe = y_test_ohe[:100]
+        X = X[:SIZE]
+        y_ohe = y_ohe[:SIZE]
+        X_test = X_test[:SIZE]
+        y_test_ohe = y_test_ohe[:SIZE]
 
     for config in configs:
         layer_sizes, lr = config["layer_sizes"], config["lr"]
@@ -77,7 +81,7 @@ def evaluate_models(
     return results
 
 
-def train_cv(X, y_ohe, kf, configs, out_enc, debug=False):
+def train_cv(X, y_ohe, kf, configs, out_enc, arch_name=None, debug=False):
     fold_train_errors = defaultdict(list)
     fold_val_errors = defaultdict(list)
     fold_train_losses = defaultdict(list)
@@ -85,8 +89,8 @@ def train_cv(X, y_ohe, kf, configs, out_enc, debug=False):
     best_config_for_lr = defaultdict(list)
 
     if debug:
-        X = X[:100]
-        y_ohe = y_ohe[:100]
+        X = X[:SIZE]
+        y_ohe = y_ohe[:SIZE]
 
     for train_idx, val_idx in kf.split(X):
 
@@ -142,17 +146,38 @@ def train_cv(X, y_ohe, kf, configs, out_enc, debug=False):
 
     best_configs_chosen = best_config_for_lr[best_lr]
 
+    # Save the best metrics for the final neural network (final training error and losses)
+    best_train_err = summary_metrics[best_lr]["mean_train_err"]
+    best_train_loss = summary_metrics[best_lr]["mean_train_loss"]
+    best_val_loss = summary_metrics[best_lr]["mean_val_loss"]
+
+    # Convert the summary_metrics dict into a DataFrame
+    df_summary = (
+        pd.DataFrame.from_dict(summary_metrics, orient="index")
+        .reset_index()
+        .rename(columns={"index": "Learning Rate"})
+    )
+    if arch_name is not None:
+        df_summary["Architecture"] = arch_name
+
     return {
         "summary_metrics": summary_metrics,
+        "summary_df": df_summary,
         "best_lr": best_lr,
         "lowest_val_error": lowest_val_error,
+        "best_train_error": best_train_err,
+        "best_train_loss": best_train_loss,
+        "best_val_loss": best_val_loss,
         "configs_chosen": best_configs_chosen,
     }
 
 
 def evaluate_trial_dataset(
-    final_nnet, X_trial, y_trial, out_enc, results_save_path="trial_dataset_results.csv"
+    final_nnet, X_trial, y_trial, arch_name, results_save_path=None
 ):
+
+    if results_save_path is None:
+        results_save_path = f"results/trial_dataset_results_{arch_name}.csv"
 
     # Forward pass to get predicted probabilities
     y_pred_probs = final_nnet.forwardprop(
@@ -176,7 +201,7 @@ def evaluate_trial_dataset(
     )
 
     # Display results
-    print("\n Trial Dataset Evaluation:")
+    print(f"\nTrial Dataset Evaluation: {arch_name}")
     print(df_results)
 
     # Save results as CSV
