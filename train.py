@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 
 import LearnNet
-from helper import make_nnet_error_rate
+from utils import make_nnet_error_rate
 
 
 def train_network(

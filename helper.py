@@ -3,7 +3,11 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import math
+import random
 
+from train import train_network, evaluate_trial_dataset
+from utils import make_nnet_error_rate
+from plots import plot_learning_curves, plot_output_weights, plot_random_hidden_units
 import LearnNet
 
 
@@ -35,15 +39,6 @@ def summarize_results(results: dict) -> dict:
     return summary
 
 
-def make_nnet_error_rate(out_enc):
-    def nnet_error_rate(y_true, y_pred):
-        y_pred_label = np.argmax(y_pred, axis=0).reshape(-1, 1)
-        y_true_label = out_enc.inverse_transform(y_true.T).reshape(-1, 1)
-        return LearnNet.error_rate(y_true_label, y_pred_label)
-
-    return nnet_error_rate
-
-
 def print_cv_summary(arch_name, cv_results, duration):
     print(f"\n=== {arch_name.upper()} CV Summary ===")
     for lr, metrics in cv_results["summary_metrics"].items():
@@ -59,7 +54,7 @@ def print_cv_summary(arch_name, cv_results, duration):
     print(f" {arch_name} CV completed in {duration/60:.2f} minutes.")
 
 
-def tabulate_and_plot_cv_errors(
+def tabulate_cv_errors(
     cv_results_dict,
     csv_save_path="cv_results_summary.csv",
     plot_save_path="cv_results_plot.png",
@@ -94,27 +89,7 @@ def tabulate_and_plot_cv_errors(
     pivot_df.to_csv(csv_save_path)
     print(f"\n CV results summary saved to '{csv_save_path}'.")
 
-    # Plotting results
-    plt.figure(figsize=(10, 6))
-    sns.barplot(
-        data=df,
-        x="Learning Rate",
-        y="Avg CV Test Misclassification Error",
-        hue="Architecture",
-    )
-    plt.title(
-        "Average CV Test Misclassification Error by Architecture and Learning Rate"
-    )
-    plt.ylabel("Avg CV Test Misclassification Error")
-    plt.xlabel("Learning Rate")
-    plt.legend(title="Architecture")
-    plt.tight_layout()
-
-    # Save the plot as an image file
-    plt.savefig(plot_save_path)
-    print(f"CV results plot saved to '{plot_save_path}'.")
-
-    plt.show()
+    return df
 
 
 def tabulate_final_results(train_curve, test_curve, save_path="final_results.csv"):
@@ -137,77 +112,122 @@ def tabulate_final_results(train_curve, test_curve, save_path="final_results.csv
     print(f"\n Final results saved to '{save_path}'.")
 
 
-def plot_and_save_final_curves(
-    train_curve,
-    test_curve,
+def generate_learning_curves(
+    train_network_fn,
+    X,
+    y_ohe,
+    X_test,
+    y_test_ohe,
     best_architecture_parameters,
-    save_path="final_training_plots.png",
+    out_enc,
+    train_sizes=None,
+    max_iters=1000,
+    debug=False,
 ):
-    """
-    Plots training/test loss and error curves, then saves the plots.
-    """
-    iterations = np.arange(len(train_curve))
 
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+    if train_sizes is None:
+        train_sizes = [10, 40, 100, 200, 400, 800, 1600]
 
-    ax1.plot(iterations, train_curve[:, 0], label="Train Loss")
-    ax1.plot(iterations, test_curve[:, 0], label="Test Loss")
-    ax1.set_title(
-        f"Loss Curves ({best_architecture_parameters['architecture']}, LR={best_architecture_parameters['best_lr']})"
-    )
-    ax1.set_xlabel("Iteration")
-    ax1.set_ylabel("Loss")
-    ax1.legend()
+    results = []
 
-    ax2.plot(iterations, train_curve[:, 1], label="Train Error")
-    ax2.plot(iterations, test_curve[:, 1], label="Test Error")
-    ax2.set_title(
-        f"Error Curves ({best_architecture_parameters['architecture']}, LR={best_architecture_parameters['best_lr']})"
-    )
-    ax2.set_xlabel("Iteration")
-    ax2.set_ylabel("Error")
-    ax2.legend()
+    for m_current in train_sizes:
+        # Subset the data
+        X_subset = X[:m_current]
+        y_subset_ohe = y_ohe[:m_current]
 
-    plt.tight_layout()
+        # Train model on the current subset
+        final_run_subset = train_network_fn(
+            X_subset,
+            y_subset_ohe,
+            X_test,
+            y_test_ohe,
+            best_architecture_parameters["layer_sizes"],
+            best_architecture_parameters["best_lr"],
+            max_iters=max_iters,
+            out_enc=out_enc,
+            debug=debug,
+        )
 
-    # Save plots
-    plt.savefig(save_path)
-    print(f"\n Training plots saved to '{save_path}'.")
+        train_loss = final_run_subset["train_err_curve"][-1, 0]
+        train_error = final_run_subset["train_err_curve"][-1, 1]
+        test_loss = final_run_subset["test_err_curve"][-1, 0]
+        test_error = final_run_subset["test_err_curve"][-1, 1]
 
-    plt.show()
+        results.append(
+            {
+                "m": m_current,
+                "train_error": train_error,
+                "test_error": test_error,
+                "train_loss": train_loss,
+                "test_loss": test_loss,
+            }
+        )
+
+    # Create a DataFrame from the collected results
+    df_results = pd.DataFrame(results)
+
+    plot_learning_curves(df_results)
+
+    return df_results
 
 
-def plot_output_weights(
+def run_experiment(
     final_run,
-    filename="final_perceptron_output_weights.png",
-    cmap="gray",
-    ncols=5,
-    reshape_size=(32, 32),
+    X_trial,
+    y_trial,
+    out_enc,
+    X,
+    y_ohe,
+    X_test,
+    y_test_ohe,
+    best_architecture_parameters,
+    debug=False,
 ):
-    K = final_run["trained_model"].nunits[-1]
 
-    # Calculate number of rows needed based on number of columns
-    nrows = math.ceil(K / ncols)
+    if debug:
 
-    # Create the grid of subplots
-    fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(3 * ncols, 3 * nrows))
+        return None
+    else:
+        # ----------------------------#
+        #   Evaluate Trial Dataset    #
+        # ----------------------------#
+        evaluate_trial_dataset(
+            final_nnet=final_run["trained_model"],
+            X_trial=X_trial,
+            y_trial=y_trial,
+            out_enc=out_enc,
+            results_save_path="trial_dataset_results.csv",
+        )
 
-    # Flatten the axes array
-    axes = axes.flatten()
+        # ----------------------------#
+        #   Learning Curve            #
+        # ----------------------------#
+        df_results = generate_learning_curves(
+            train_network_fn=train_network,
+            X=X,
+            y_ohe=y_ohe,
+            X_test=X_test,
+            y_test_ohe=y_test_ohe,
+            best_architecture_parameters=best_architecture_parameters,
+            out_enc=out_enc,
+            train_sizes=None,
+            max_iters=1000,
+            debug=debug,
+        )
 
-    # Loop over each output unit, reshape its weights, and plot
-    for out_unit in range(K):
-        # Get weight vector for current output unit and skip bias (first column)
-        w = final_run["trained_model"].layer[-1].W[out_unit, 1:]
-        ax = axes[out_unit]
-        ax.imshow(w.reshape(reshape_size), cmap=cmap)
-        ax.set_title(f"Output unit {out_unit}")
-        ax.axis("off")  # Hide axis ticks and labels
+        # --------------------------------------#
+        #   Weight Parameter Interpretation     #
+        # --------------------------------------#
 
-    # Hide any extra subplots that are not used
-    for i in range(K, len(axes)):
-        axes[i].axis("off")
+        plot_output_weights(final_run)
 
-    plt.tight_layout()
-    plt.savefig(filename, dpi=300)
-    plt.show()
+        # 4) Plot random hidden units from the first hidden layer
+        plot_random_hidden_units(
+            final_run,
+            layer_idx=1,
+            num_units=10,
+            reshape_size=(32, 32),
+            cmap="gray",
+        )
+
+        return df_results

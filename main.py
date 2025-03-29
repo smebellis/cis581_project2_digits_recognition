@@ -7,21 +7,19 @@ import random
 from collections import Counter
 from itertools import product
 
-import matplotlib.pyplot as plt
 import numpy as np
-import pandas as pd
 from sklearn.model_selection import KFold
 from sklearn.preprocessing import LabelBinarizer
 
 import LearnNet
+from plots import plot_and_save_final_curves, plot_cv_errors
 from helper import (
-    plot_and_save_final_curves,
     print_cv_summary,
-    tabulate_and_plot_cv_errors,
     tabulate_final_results,
-    plot_output_weights,
+    tabulate_cv_errors,
+    run_experiment,
 )
-from train import evaluate_trial_dataset, train_cv, train_network
+from train import train_cv, train_network
 
 warnings.filterwarnings(
     "ignore", category=RuntimeWarning, message="overflow encountered in exp"
@@ -154,11 +152,13 @@ if __name__ == "__main__":
             "Two-Layer NN": two_layer_cv,
         }
 
-        tabulate_and_plot_cv_errors(
+        df_cv = tabulate_cv_errors(
             cv_results_all,
             csv_save_path="cv_results_summary.csv",
             plot_save_path="cv_results_plot.png",
         )
+
+        plot_cv_errors(df_cv, plot_save_path="cv_results_plot.png")
 
         # -------------------------------------------------------#
         #   Model Selection based on Misclassification Error     #
@@ -252,95 +252,24 @@ if __name__ == "__main__":
         for key, value in best_architecture_parameters.items():
             print(f"{key.capitalize()}: {value}")
 
-    # ----------------------------#
-    #   Evaluate Trial Dataset    #
-    # ----------------------------#
+        # ----------------------------#
+        #   Evaluate Trial Dataset    #
+        #   Learning Curve            #
+        #   Weights Interpretation    #
+        # ----------------------------#
 
-    if DEBUG:
-        pass
-    else:
-
-        evaluate_trial_dataset(
-            final_nnet=final_run["trained_model"],
+        df_results = run_experiment(
+            final_run=final_run,
             X_trial=X_trial,
             y_trial=y_trial,
             out_enc=out_enc,
-            results_save_path="trial_dataset_results.csv",
+            X=X,
+            y_ohe=y_ohe,
+            X_test=X_test,
+            y_test_ohe=y_test_ohe,
+            best_architecture_parameters=best_architecture_parameters,
+            debug=DEBUG,
         )
 
-        # ----------------------------#
-        #   Learning Curve            #
-        # ----------------------------#
-
-        train_sizes = [10, 40, 100, 200, 400, 800, 1600]
-        results = []
-
-        for m_current in train_sizes:
-            X_subset = X[:m_current]
-            y_subset_ohe = y_ohe[:m_current]
-
-            # Train model explicitly on current subset
-            final_run_subset = train_network(
-                X_subset,
-                y_subset_ohe,
-                X_test,
-                y_test_ohe,
-                best_architecture_parameters["layer_sizes"],
-                best_architecture_parameters["best_lr"],
-                max_iters=1000,
-                out_enc=out_enc,
-                debug=DEBUG,
-            )
-
-            results.append(
-                {
-                    "m": m_current,
-                    "train_error": final_run_subset["train_err_curve"][-1, 1],
-                    "test_error": final_run_subset["test_err_curve"][-1, 1],
-                    "train_loss": final_run_subset["train_err_curve"][-1, 0],
-                    "test_loss": final_run_subset["test_err_curve"][-1, 0],
-                }
-            )
-
-        df_results = pd.DataFrame(results)
-
-        plt.figure(figsize=(10, 5))
-        plt.plot(
-            df_results["m"], df_results["train_error"], "o-", label="Training Error"
-        )
-        plt.plot(df_results["m"], df_results["test_error"], "s-", label="Test Error")
-        plt.title("Learning Curve (Misclassification Error)")
-        plt.xlabel("Number of Training Examples (m)")
-        plt.ylabel("Misclassification Error")
-        plt.legend()
-        plt.grid(True)
-        plt.tight_layout()
-        plt.savefig("learning_curve_misclassification_error.png")
-        plt.show()
-
-        plt.figure(figsize=(10, 5))
-        plt.plot(df_results["m"], df_results["train_loss"], "o-", label="Training Loss")
-        plt.plot(df_results["m"], df_results["test_loss"], "s-", label="Test Loss")
-        plt.title("Learning Curve (Proxy Error/Loss)")
-        plt.xlabel("Number of Training Examples (m)")
-        plt.ylabel("Loss")
-        plt.legend()
-        plt.grid(True)
-        plt.tight_layout()
-        plt.savefig("learning_curve_proxy_error.png")
-        plt.show()
-
-        # --------------------------------------#
-        #   Weight Parameter Initialization     #
-        # --------------------------------------#
-
-        plot_output_weights(final_run)
-
-    hidden_units = random.sample(range(H), 10)
-    for h in hidden_units:
-        w = (
-            final_run["trained_model"].layer[0].W[h, 1:]
-        )  # or layer[1] if that’s the first hidden
-        plt.imshow(w.reshape(32, 32), cmap="gray")
-        plt.title(f"Hidden Unit {h}")
-        plt.show()
+        if df_results is not None:
+            print(df_results)
