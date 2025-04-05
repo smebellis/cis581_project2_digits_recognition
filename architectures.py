@@ -291,7 +291,7 @@ def two_layer_nn(
                 first_units,
                 second_units,
                 K,
-            ]  # explicitly define the layer sizes
+            ]
 
             nnet_time = LearnNet.time_nnet(nunits)
 
@@ -370,7 +370,6 @@ def two_layer_single_lr(
 
     nnet_metric = LearnNet.NNetMetric(f=nnet_error_rate)
 
-    # Explicitly define the layer sizes: [input_dim, first_hidden, second_hidden, output_dim]
     nunits = [n, first_units, second_units, K]
 
     # Estimate time for one iteration
@@ -393,7 +392,6 @@ def two_layer_single_lr(
         verbose=0,  # or 1 if you want to see training logs
     )
 
-    # Convert logs to arrays: shape (iterations, 2) => (loss, error)
     train_err = np.array(opt.train_err)
     test_err = np.array(opt.test_err)
 

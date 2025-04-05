@@ -86,7 +86,7 @@ def tabulate_cv_errors(
     print("\n Average CV Test Misclassification Errors:")
     print(pivot_df)
 
-    # Save the tabulated results as CSV
+    # Save the results as CSV
     pivot_df.to_csv(csv_save_path)
     print(f"\n CV results summary saved to '{csv_save_path}'.")
 
@@ -96,10 +96,6 @@ def tabulate_cv_errors(
 def tabulate_final_results(
     train_curve, test_curve, model_name, save_path="results/final_results.csv"
 ):
-    """
-    Tabulates and prints the final training/test proxy error (loss)
-    and misclassification error clearly.
-    """
 
     print(f"\nFinal Neural Network Performance for model: {model_name}")
 
@@ -308,7 +304,6 @@ def get_best_params_and_final_runs(
             train_curve, test_curve, best_params, save_path=plot_save_path
         )
 
-        # Optionally, tabulate final results for each model (saved as CSV)
         csv_save_path = f"results/final_results_{model_name.replace(' ', '_')}.csv"
         tabulate_final_results(
             train_curve, test_curve, model_name, save_path=csv_save_path

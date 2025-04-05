@@ -1,9 +1,18 @@
+"""
+Student: Ryan Ellis
+
+CIS 581 Computational Learning Section 002
+
+Instructor: Luis E Ortiz
+"""
+
 import os
 import pickle
 import time
 import warnings
 import pandas as pd
 from itertools import product
+from pathlib import Path
 
 import numpy as np
 from sklearn.model_selection import KFold
@@ -83,6 +92,11 @@ if __name__ == "__main__":
     # -----------------------------#
     #   Cross-Validation Phase     #
     # -----------------------------#
+
+    dir_path = Path("results")
+
+    dir_path.mkdir(parents=True, exist_ok=True)
+
     if os.path.exists(CV_RESULTS_FILE):
         print("\nSaved CV results found. Loading...")
         with open(CV_RESULTS_FILE, "rb") as f:
@@ -188,15 +202,14 @@ if __name__ == "__main__":
             "Two-Layer NN": two_layer_cv,
         }
 
-        # df_cv = tabulate_cv_errors(
-        #     cv_results_all,
-        #     csv_save_path="results/cv_results_summary.csv",
-        #     plot_save_path="results/cv_results_plot.png",
-        # )
+        df_cv = tabulate_cv_errors(
+            cv_results_all,
+            csv_save_path="results/cv_results_summary.csv",
+            plot_save_path="results/cv_results_plot.png",
+        )
 
         dfs = []
         for arch, result in cv_results_all.items():
-            # result should be the dictionary returned by train_cv for each architecture
             df_arch = result["summary_df"]
             dfs.append(df_arch)
 
@@ -213,7 +226,6 @@ if __name__ == "__main__":
             pickle.dump(saved_results, f)
         print("\nCV results saved successfully!")
 
-    # Bundle CV results into a list for each model
     architectures = [
         ("Perceptron", perceptron_cv),
         ("Multi-Layer NN", multi_layer_cv),

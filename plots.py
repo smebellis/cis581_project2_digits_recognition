@@ -166,7 +166,6 @@ def plot_random_hidden_units(
 
     plt.tight_layout()
 
-    # Optionally save the figure
     if filename:
         plt.savefig(filename, dpi=300)
 
@@ -185,7 +184,6 @@ def plot_random_hidden_units_from_architectures(
     filename_prefix="results/hidden_units",
 ):
 
-    # If input is a list, convert it to a dictionary with enumerated model names.
     if isinstance(architecture_final_runs, list):
         architecture_final_runs = {
             f"Model {i+1}": run for i, run in enumerate(architecture_final_runs)
